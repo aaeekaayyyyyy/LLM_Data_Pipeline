@@ -24,10 +24,9 @@ What the notebook does, step by step:
 
 2. **Tokenizer** — DistilGPT-2 (`distilgpt2`) via `AutoTokenizer`. Pad token set to EOS.
 
-3. **Tokenize** — Batched `.map`: each example → `input_ids` and `attention_mask`. No truncation or `max_length` in the current tokenize step. Produces `tokenized_ds`.
+3. **Tokenize** — Batched `.map` with **`truncation=True`** and **`max_length=512`** (tunable to 1024 in the notebook). Each example → `input_ids` and `attention_mask`; long reviews are truncated to avoid warnings and control memory. Produces `tokenized_ds`.
 
-4. **Group into blocks** — Concatenates token IDs (and attention masks) in batches, trims to a multiple of `block_size` (128), and slices into fixed-length chunks. Uses **`_flatten()`** so it works when the dataset stores lists or numpy arrays, and **`remove_columns=tokenized_ds.column_names`** so the map output has only the new chunk columns (avoids ArrowInvalid). Produces **`lm_ds`** (train LM sequences).  
-   Cell 5 also references **`tokenized_ds_val`** and **`lm_ds_val`**; that would require a separate validation tokenized dataset, which is not created in the current notebook (train-only load and tokenize in cells 2 and 4).
+4. **Group into blocks** — Concatenates token IDs (and attention masks) in batches, trims to a multiple of `block_size` (128), and slices into fixed-length chunks. Uses **`_flatten()`** so it works when the dataset stores lists or numpy arrays, and **`remove_columns=tokenized_ds.column_names`** so the map output has only the new chunk columns (avoids ArrowInvalid). Produces **`lm_ds`** (train LM sequences).
 
 5. **DataLoader** — Custom `collate_fn` stacks `input_ids` and sets `labels = input_ids.clone()`. **`train_loader`** with `batch_size=8`, `shuffle=True`. No validation DataLoader in the notebook.
 
@@ -45,12 +44,13 @@ What changed from the **original** Lab1 (WikiText-2 + GPT-2) to the **current** 
 |------|----------|-----|
 | **Dataset** | WikiText-2 **train** only. | **IMDB train** only (`split="train"`). |
 | **Model / tokenizer** | GPT-2. | **DistilGPT-2** (`distilgpt2`). |
-| **Tokenization** | `tokenizer(examples["text"], return_special_tokens_mask=False)`. | Same; no truncation or `max_length` in the current notebook. |
+| **Tokenization** | `tokenizer(examples["text"], return_special_tokens_mask=False)`; no length limit. | **`truncation=True`** and **`max_length=512`** (or 1024) to avoid long-sequence warnings and control memory. |
 | **Grouping** | `sum(examples["input_ids"], [])` and `sum(..., attention_mask)`. Caused **ArrowInvalid** on IMDB (column length mismatch). | **`_flatten()`** to handle list/numpy; **`remove_columns=tokenized_ds.column_names`** so the map output has only chunk columns and matching lengths. |
-| **Output** | One `lm_ds`, one `train_loader`, one-batch shape check. | Same: one `lm_ds`, one `train_loader`, one-batch check. Cell 5 also builds `lm_ds_val` from `tokenized_ds_val`, which is not defined in the current cells (train-only pipeline). |
+| **Output** | One `lm_ds`, one `train_loader`, one-batch shape check. | Same: one `lm_ds`, one `train_loader`, one-batch check (train-only). |
 
 ### Summary
 
 - **Dataset:** WikiText-2 → IMDB (train only).
 - **Model:** GPT-2 → DistilGPT-2.
+- **Tokenization:** `truncation=True`, `max_length=512` (or 1024) to cap sequence length and control memory.
 - **Grouping fix:** `_flatten` + `remove_columns` so grouping works on IMDB and avoids ArrowInvalid. No validation split or training in the notebook.
